@@ -1,0 +1,25 @@
+name: StreakManager
+version: '1.0.0'
+main: ro.marioenache.streakmanager.StreakManager
+api-version: '1.20'
+authors: [Mario Enache]
+description: A plugin that manages player streaks with configurable rewards
+softdepend: [PlaceholderAPI]
+
+commands:
+  addstreak:
+    description: Add to a player's streak count
+    usage: /addstreak <player> [amount]
+    permission: streakmanager.add
+  streakadmin:
+    description: Admin commands for StreakManager
+    usage: /streakadmin reload|reset <player>|set <player> <amount>
+    permission: streakmanager.admin
+
+permissions:
+  streakmanager.add:
+    description: Allows adding to a player's streak
+    default: op
+  streakmanager.admin:
+    description: Allows access to admin commands
+    default: op

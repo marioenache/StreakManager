@@ -1,0 +1,53 @@
+# StreakManager Configuration
+# Created by Mario Enache
+
+# Messages configuration
+messages:
+  no-permission: "&cYou don't have permission to use this command!"
+  player-not-found: "&cPlayer not found!"
+  invalid-amount: "&cInvalid amount! Must be a number."
+  config-reloaded: "&aConfiguration reloaded!"
+  streak:
+    added: "&aAdded %amount% streak to %player%!"
+    received: "&aYour streak has been increased by %amount%!"
+    reset: "&cYour streak has been reset!"
+    reset-admin: "&aReset streak for %player%!"
+    set: "&aSet streak for %player% to %amount%!"
+    set-received: "&aYour streak has been set to %amount%!"
+    milestone: "&aYou've reached a streak of %amount%!"
+
+# Rewards for reaching specific streak counts
+# Format:
+# rewards:
+#   [streak number]:
+#     - 'command to run'
+#     - 'another command'
+# Use %player% as a placeholder for the player's name
+
+rewards:
+  5:
+    - 'give %player% diamond 1'
+    - 'broadcast %player% has reached a 5-day streak!'
+  10:
+    - 'give %player% diamond 5'
+    - 'broadcast %player% has reached a 10-day streak! Amazing!'
+  25:
+    - 'give %player% diamond_block 1'
+    - 'broadcast %player% has reached a 25-day streak! Incredible dedication!'
+  50:
+    - 'give %player% diamond_block 5'
+    - 'broadcast %player% has reached a 50-day streak! They are unstoppable!'
+  100:
+    - 'give %player% netherite_ingot 2'
+    - 'broadcast %player% has reached a 100-day streak! A true legend!'
+
+# Settings for streak management
+settings:
+  # Auto-save interval in minutes
+  save-interval: 5
+  # Save on player quit
+  save-on-quit: true
+  # Backup data file before saving
+  backup-before-save: true
+  # Maximum backup files to keep
+  max-backups: 5
