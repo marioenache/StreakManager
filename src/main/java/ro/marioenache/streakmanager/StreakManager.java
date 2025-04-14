@@ -21,22 +21,22 @@ public class StreakManager extends JavaPlugin {
     public void onEnable() {
         // Save default config
         saveDefaultConfig();
-        
+
         // Initialize managers
         configManager = new ConfigManager(this);
         dataManager = new StreakDataManager(this);
-        
+
         // Load data
         configManager.loadRewards();
         dataManager.loadPlayerData();
-        
+
         // Register commands
         getCommand("addstreak").setExecutor(new AddStreakCommand(this));
         getCommand("streakadmin").setExecutor(new StreakAdminCommand(this));
-        
+
         // Register events
         getServer().getPluginManager().registerEvents(new PlayerLoginListener(this), this);
-        
+
         // Setup auto-save task
         int saveInterval = getConfig().getInt("settings.save-interval", 5) * 1200; // Convert minutes to ticks
         new BukkitRunnable() {
@@ -46,7 +46,7 @@ public class StreakManager extends JavaPlugin {
                 getLogger().info("Auto-saving player streak data...");
             }
         }.runTaskTimerAsynchronously(this, saveInterval, saveInterval);
-        
+
         // Check for PlaceholderAPI
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new StreakPlaceholder(this).register();
@@ -55,27 +55,27 @@ public class StreakManager extends JavaPlugin {
         } else {
             getLogger().warning("PlaceholderAPI not found! Placeholders will not work.");
         }
-        
+
         getLogger().info("StreakManager has been enabled!");
     }
 
     @Override
     public void onDisable() {
-        // Save player data on shutdown
+        // Ensure all data is saved before shutdown
         if (dataManager != null) {
-            dataManager.savePlayerData();
+            dataManager.prepareShutdown();
         }
         getLogger().info("StreakManager has been disabled!");
     }
-    
+
     public StreakDataManager getStreakDataManager() {
         return dataManager;
     }
-    
+
     public ConfigManager getConfigManager() {
         return configManager;
     }
-    
+
     public boolean isPlaceholderAPIEnabled() {
         return placeholderAPIEnabled;
     }

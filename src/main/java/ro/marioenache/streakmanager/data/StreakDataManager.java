@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class StreakDataManager {
 
@@ -29,12 +30,14 @@ public class StreakDataManager {
     private ConcurrentHashMap<UUID, PlayerData> playerDataMap;
     private final SimpleDateFormat dateFormat;
     private boolean isSaving;
+    private boolean isShuttingDown;
 
     public StreakDataManager(StreakManager plugin) {
         this.plugin = plugin;
         this.playerDataMap = new ConcurrentHashMap<>();
         this.dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
         this.isSaving = false;
+        this.isShuttingDown = false;
         setupStreakData();
     }
 
@@ -52,13 +55,13 @@ public class StreakDataManager {
                 e.printStackTrace();
             }
         }
-        
+
         // Create backup directory
         File backupDir = new File(plugin.getDataFolder(), "backups");
         if (!backupDir.exists()) {
             backupDir.mkdirs();
         }
-        
+
         streakData = YamlConfiguration.loadConfiguration(streakFile);
     }
 
@@ -73,7 +76,7 @@ public class StreakDataManager {
 
         try {
             Files.copy(streakFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            
+
             // Clean old backups
             File[] backups = backupDir.listFiles((dir, name) -> name.startsWith("data-") && name.endsWith(".yml"));
             if (backups != null) {
@@ -81,7 +84,7 @@ public class StreakDataManager {
                 if (backups.length > maxBackups) {
                     // Sort by last modified
                     java.util.Arrays.sort(backups, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
-                    
+
                     // Delete oldest backups
                     for (int i = maxBackups; i < backups.length; i++) {
                         backups[i].delete();
@@ -100,17 +103,18 @@ public class StreakDataManager {
                     UUID uuid = UUID.fromString(uuidString);
                     int streak = streakData.getInt("players." + uuidString + ".streak");
                     String name = streakData.getString("players." + uuidString + ".name", "");
-                    
+
                     PlayerData playerData = new PlayerData(uuid);
                     playerData.setStreak(streak);
                     playerData.setName(name);
-                    
+
                     playerDataMap.put(uuid, playerData);
                 } catch (IllegalArgumentException e) {
                     plugin.getLogger().warning("Invalid UUID in data file: " + uuidString);
                 }
             }
         }
+        plugin.getLogger().info("Loaded " + playerDataMap.size() + " player records.");
     }
 
     public synchronized void savePlayerData() {
@@ -121,43 +125,67 @@ public class StreakDataManager {
 
         isSaving = true;
 
-        // Run asynchronously to prevent server lag
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                try {
-                    createBackup();
+        try {
+            createBackup();
 
-                    for (Map.Entry<UUID, PlayerData> entry : playerDataMap.entrySet()) {
-                        UUID uuid = entry.getKey();
-                        PlayerData data = entry.getValue();
-                        
-                        streakData.set("players." + uuid.toString() + ".streak", data.getStreak());
-                        streakData.set("players." + uuid.toString() + ".name", data.getName());
-                    }
-                    
-                    try {
-                        streakData.save(streakFile);
-                    } catch (IOException e) {
-                        plugin.getLogger().severe("Could not save player data!");
-                        e.printStackTrace();
-                    }
-                } finally {
-                    isSaving = false;
-                }
+            // Clear existing data to prevent stale entries
+            streakData = new YamlConfiguration();
+
+            for (Map.Entry<UUID, PlayerData> entry : playerDataMap.entrySet()) {
+                UUID uuid = entry.getKey();
+                PlayerData data = entry.getValue();
+
+                streakData.set("players." + uuid.toString() + ".streak", data.getStreak());
+                streakData.set("players." + uuid.toString() + ".name", data.getName());
             }
-        }.runTaskAsynchronously(plugin);
+
+            try {
+                // Save synchronously during shutdown
+                if (isShuttingDown) {
+                    streakData.save(streakFile);
+                    plugin.getLogger().info("Saved " + playerDataMap.size() + " player records during shutdown.");
+                } else {
+                    // Save asynchronously during normal operation
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                streakData.save(streakFile);
+                                plugin.getLogger().info("Saved " + playerDataMap.size() + " player records.");
+                            } catch (IOException e) {
+                                plugin.getLogger().log(Level.SEVERE, "Failed to save player data!", e);
+                            }
+                        }
+                    }.runTaskAsynchronously(plugin);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().severe("Could not save player data!");
+                e.printStackTrace();
+            }
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    public void prepareShutdown() {
+        isShuttingDown = true;
+        plugin.getLogger().info("Preparing to save data before shutdown...");
+        savePlayerData();
     }
 
     public PlayerData getPlayerData(UUID uuid) {
-        return playerDataMap.getOrDefault(uuid, new PlayerData(uuid));
+        return playerDataMap.computeIfAbsent(uuid, id -> {
+            PlayerData data = new PlayerData(id);
+            // Save new player data immediately
+            savePlayerData();
+            return data;
+        });
     }
 
     public void setPlayerData(UUID uuid, PlayerData data) {
         playerDataMap.put(uuid, data);
-        if (plugin.getConfig().getBoolean("settings.save-on-quit", true)) {
-            savePlayerData();
-        }
+        // Save immediately when data is set
+        savePlayerData();
     }
 
     public int getPlayerStreak(UUID uuid) {
@@ -168,7 +196,10 @@ public class StreakDataManager {
         PlayerData data = getPlayerData(uuid);
         data.setStreak(value);
         playerDataMap.put(uuid, data);
-        
+
+        // Save immediately when streak is set
+        savePlayerData();
+
         // Check for rewards
         checkForRewards(uuid, value);
     }
@@ -176,12 +207,14 @@ public class StreakDataManager {
     public void updatePlayerName(UUID uuid, String name) {
         PlayerData data = getPlayerData(uuid);
         String oldName = data.getName();
-        
+
         if (!name.equals(oldName)) {
-            plugin.getLogger().info("Player " + (oldName.isEmpty() ? uuid.toString() : oldName) + 
-                                   " is now known as " + name + ", updating records.");
+            plugin.getLogger().info("Player " + (oldName.isEmpty() ? uuid.toString() : oldName) +
+                    " is now known as " + name + ", updating records.");
             data.setName(name);
             playerDataMap.put(uuid, data);
+            // Save immediately when name is updated
+            savePlayerData();
         }
     }
 
@@ -189,22 +222,25 @@ public class StreakDataManager {
         PlayerData data = getPlayerData(uuid);
         int currentStreak = data.getStreak();
         int newStreak = currentStreak + amount;
-        
+
         data.setStreak(newStreak);
         playerDataMap.put(uuid, data);
-        
+
+        // Save immediately when streak is modified
+        savePlayerData();
+
         // Check for rewards
         checkForRewards(uuid, newStreak);
     }
 
     private void checkForRewards(UUID uuid, int streakValue) {
         Map<Integer, List<String>> streakCommands = plugin.getConfigManager().getStreakCommands();
-        
+
         if (streakCommands.containsKey(streakValue)) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 List<String> commands = streakCommands.get(streakValue);
-                
+
                 // Execute commands on the main thread
                 new BukkitRunnable() {
                     @Override
@@ -215,9 +251,9 @@ public class StreakDataManager {
                         }
                     }
                 }.runTask(plugin);
-                
+
                 String message = plugin.getConfig().getString("messages.streak.milestone", "&aYou've reached a streak of %amount%!")
-                    .replace("%amount%", String.valueOf(streakValue));
+                        .replace("%amount%", String.valueOf(streakValue));
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
             }
         }
