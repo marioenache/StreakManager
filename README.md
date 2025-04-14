@@ -4,7 +4,7 @@ A Minecraft plugin that manages player streaks with configurable rewards. Keep y
 
 ## Features
 
-- Track player login streaks
+- Track player <s>login</s> defined streaks
 - Configurable rewards for streak milestones
 - Customizable messages
 - PlaceholderAPI support
