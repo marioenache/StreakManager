@@ -21,7 +21,10 @@ public class AddStreakCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("streakmanager.add")) {
-            sender.sendMessage(ChatColor.RED + "You don't have permission to use this command!");
+            String noPermMsg = plugin.getConfig().getString("messages.no-permission", "&cYou don't have permission to use this command!");
+            if (noPermMsg != null && !noPermMsg.isEmpty()) {
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', noPermMsg));
+            }
             return true;
         }
 
@@ -32,7 +35,10 @@ public class AddStreakCommand implements CommandExecutor {
 
         final Player target = Bukkit.getPlayer(args[0]);
         if (target == null) {
-            sender.sendMessage(ChatColor.RED + "Player not found!");
+            String playerNotFoundMsg = plugin.getConfig().getString("messages.player-not-found", "&cPlayer not found!");
+            if (playerNotFoundMsg != null && !playerNotFoundMsg.isEmpty()) {
+                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', playerNotFoundMsg));
+            }
             return true;
         }
 
@@ -41,7 +47,10 @@ public class AddStreakCommand implements CommandExecutor {
             try {
                 amount = Integer.parseInt(args[1]);
             } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.RED + "Invalid amount! Must be a number.");
+                String invalidAmountMsg = plugin.getConfig().getString("messages.invalid-amount", "&cInvalid amount! Must be a number.");
+                if (invalidAmountMsg != null && !invalidAmountMsg.isEmpty()) {
+                    sender.sendMessage(ChatColor.translateAlternateColorCodes('&', invalidAmountMsg));
+                }
                 return true;
             }
         } else {
@@ -58,8 +67,18 @@ public class AddStreakCommand implements CommandExecutor {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        sender.sendMessage(ChatColor.GREEN + "Added " + amount + " streak to " + target.getName() + "!");
-                        target.sendMessage(ChatColor.GREEN + "Your streak has been increased by " + amount + "!");
+                        String addedMsg = plugin.getConfig().getString("messages.streak.added", "&aAdded %amount% streak to %player%!")
+                                .replace("%amount%", String.valueOf(amount))
+                                .replace("%player%", target.getName());
+                        if (addedMsg != null && !addedMsg.isEmpty()) {
+                            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', addedMsg));
+                        }
+
+                        String receivedMsg = plugin.getConfig().getString("messages.streak.received", "&aYour streak has been increased by %amount%!")
+                                .replace("%amount%", String.valueOf(amount));
+                        if (receivedMsg != null && !receivedMsg.isEmpty()) {
+                            target.sendMessage(ChatColor.translateAlternateColorCodes('&', receivedMsg));
+                        }
                     }
                 }.runTask(plugin);
             }
